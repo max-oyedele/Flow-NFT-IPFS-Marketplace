@@ -1,6 +1,7 @@
 # Flow-NFT-Mint-IPFS-Marketplace
 
 ## Creating the contract and minting a token
+flow project init
 
 flow project start-emulator
 

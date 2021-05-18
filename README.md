@@ -1,6 +1,6 @@
 # Flow-NFT-Mint-IPFS-Marketplace
 
-<img src="./mvp.png" width="1248px" height="615px">
+<img src="./mvp.png" width="1248px" height="580px">
 
 ## Creating the contract and minting a token
 flow project init

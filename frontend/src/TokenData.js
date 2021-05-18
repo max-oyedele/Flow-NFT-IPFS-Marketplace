@@ -1,56 +1,150 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import * as fcl from '@onflow/fcl'
+import * as t from '@onflow/types'
 
 const TokenData = () => {
-  const [nftInfo, setNftInfo] = useState(null)
-  const fetchTokenData = async () => {
-    const encoded = await fcl
-      .send([
+  useEffect(() => {
+    checkMarketplace()
+  }, [])
+
+  const [tokensToSell, setTokensToSell] = useState([])
+
+  const checkMarketplace = async () => {
+    try {
+      const encoded = await fcl.send([
         fcl.script`
-        import PinataPartyContract from 0xf8d6e0586b0a20c7
-        pub fun main() : {String : String} {
-          let nftOwner = getAccount(0xf8d6e0586b0a20c7)
-          let capability = nftOwner.getCapability<&{PinataPartyContract.NFTReceiver}>(/public/NFTReceiver)
+        import MarketplaceContract from 0xf8d6e0586b0a20c7
 
-          let receiverRef = capability.borrow() ?? panic("Could not borrow the receiver reference")
-
-          return receiverRef.getMetadata(id: 1)
+        pub fun main(): [UInt64] {
+          let account1 = getAccount(0xf8d6e0586b0a20c7)
+          let acct1saleRef = account1.getCapability<&AnyResource{MarketplaceContract.SalePublic}>(/public/NFTSale).borrow()
+            ?? panic("Could not borrow acct2 nft sale reference")
+          
+          return acct1saleRef.getIDs()
         }
         `
-      ])
+      ]);
 
-    const decoded = await fcl.decode(encoded)
-    setNftInfo(decoded)
+      const decoded = await fcl.decode(encoded);
+      console.log(decoded);
+
+      let marketplaceMetadata = []
+      for (const id of decoded) {
+        const encodedMetadata = await fcl.send([
+          fcl.script`
+            import PinataPartyContract from 0xf8d6e0586b0a20c7
+
+            pub fun main(id: Int) : {String : String} {
+              let nftOwner = getAccount(0xf8d6e0586b0a20c7)
+              let capability = nftOwner.getCapability<&{PinataPartyContract.NFTReceiver}>(/public/NFTReceiver)
+
+              let receiverRef = capability.borrow()
+                ?? panic("Could not borrow the receiver reference")
+
+              return receiverRef.getMetadata(id: 1)
+            }
+          `,
+          fcl.args([fcl.arg(id, t.Int)])
+        ]);
+
+        const decodedMetadata = await fcl.decode(encodedMetadata)
+
+        const encodedPrice = await fcl.send([
+          fcl.script`
+          import MarketplaceContract from 0xf8d6e0586b0a20c7
+          
+          pub fun main(id: UInt64): UFix64? {
+            let account1 = getAccount(0xf8d6e0586b0a20c7)
+            let acct1saleRef = account1.getCapability<&AnyResource{MarketplaceContract.SalePublic}>(/public/NFTSale)
+            .borrow()
+            ?? panic("Could not borrow acct nft sale reference")
+            
+            return acct1saleRef.idPrice(tokenID: id)
+          }
+          `,
+          fcl.args([
+            fcl.arg(id, t.UInt64)
+          ])
+        ])
+
+        const decodedPrice = await fcl.decode(encodedPrice)
+        decodedMetadata["price"] = decodedPrice;
+        marketplaceMetadata.push(decodedMetadata)
+      }
+      console.log(marketplaceMetadata)
+      setTokensToSell(marketplaceMetadata)
+    } catch (error) {
+      console.log("No NFTs For Sale")
+    }
+  }
+
+  const buyToken = async (tokenId) => {
+    const txId = await fcl.send([
+      fcl.proposer(fcl.authz),
+      fcl.payer(fcl.authz),
+      fcl.authorizations([fcl.authz]),
+      fcl.limit(50),
+      fcl.args([fcl.arg(tokenId, t.UInt64)]),
+      fcl.transaction`
+        import PinataPartyContract from 0xf8d6e0586b0a20c7
+        import PinnieToken from 0xf8d6e0586b0a20c7
+        import MarketplaceContract from 0xf8d6e0586b0a20c7
+
+        transaction {
+          let collectionRef: &AnyResource{PinataPartyContract.NFTReceiver}
+          let temporaryVault: @PinnieToken.Vault
+
+          prepare(acct: AuthAccount){
+            self.collectionRef = acct.borrow<&AnyResource{PinataPartyContract.NFTReceiver}>(from: /storage/NFTCollection)!
+            let vaultRef = acct.borrow<&PinnieToken.Vault>(from: /storage/MainVault)
+              ?? panic("Could not borrow owner's vault reference")
+            
+            self.temporaryVault <- vaultRef.withdraw(amount: 10.0)
+          }
+
+          execute {
+            let seller = getAccount(0xf8d6e0586b0a20c7)
+            let saleRef = seller.getCapability<&AnyResource{MarketplaceContract.SalePublic}>(/public/NFTSale).borrow()
+              ?? panic("Could not borrow seller's sale reference")
+
+            saleRef.purchase(tokenID: tokenId, recipient: self.collectionRef, buyTokens: <-self.temporaryVault)
+          }
+        }
+      `
+    ])
+
+    await fcl.decode(txId)
+    checkMarketplace()
   }
 
   return (
     <div className="token-data">
-      <div className="center">
-        <button className="btn-primary" onClick={fetchTokenData}>Fetch Token Data</button>
-      </div>
       {
-        nftInfo &&
-        <div>
-          {
-            Object.keys(nftInfo).map(k => {
-              return (
-                <p>{k}: {nftInfo[k]}</p>
-              )
-            })
-          }
-          <div className="center video">
-            <video id="nft-video" canplaythrough controls width="85%">
-              <source src={`https://ipfs.io/ipfs/${nftInfo["uri"].split("://")[1]}`}
-                type="video/mp4" />
-            </video>
-            <div>
-              <button onClick={() => setNftInfo(null)} className="btn-secondary">Clear Token Info</button>
+        tokensToSell.map(token => {
+          return (
+            <div key={token.uri} className="listing">
+              <div>
+                <h3>{token.name}</h3>
+                <h4>Stats</h4>
+                <p>Overall Rating: {token.rating}</p>
+                <p>Swing Angle: {token.swing_angle}</p>
+                <p>Swing Velocity: {token.swing_velocity}</p>
+                <h4>Video</h4>
+                <video loop={true} autoPlay={true} playsInline={true} preload="auto" width="85%">
+                  <source src={`https://ipfs.io/ipfs/${token["uri"].split("://")[1]}`} type="video/mp4" />
+                </video>
+                <h4>Price</h4>
+                <p>{parseInt(token.price, 10).toFixed(2)} Pinnies</p>
+                <button className="btn-primary" onClick={()=>buyToken(1)}>Buy Now</button>
+              </div>
             </div>
-          </div>
-        </div>
+          )
+        })
       }
     </div>
   )
 }
 
-export default TokenData
+export default TokenData;
+
+

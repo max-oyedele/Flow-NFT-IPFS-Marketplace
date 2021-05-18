@@ -49,4 +49,14 @@ pub contract PinnieToken {
       recipientRef.deposit(from: <- create Vault(balance: amount))
     }
   }
+
+  init(){
+    self.totalSupply = 30.0
+    self.tokenName = "Pinnie"
+
+    let vault <- create Vault(balance: self.totalSupply)
+    self.account.save(<-vault, to: /storage/MainVault)
+    self.account.save(<-create VaultMinter(), to: /storage/MainMinter)
+    self.account.link<&VaultMinter>(/private/Minter, target: /storage/MainMinter)
+  }
 }

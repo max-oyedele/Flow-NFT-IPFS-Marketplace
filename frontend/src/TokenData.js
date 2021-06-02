@@ -14,15 +14,16 @@ const TokenData = () => {
       const encoded = await fcl.send([
         fcl.script`
         import MarketplaceContract from 0xf8d6e0586b0a20c7
-
         pub fun main(): [UInt64] {
-          let account1 = getAccount(0xf8d6e0586b0a20c7)
-          let acct1saleRef = account1.getCapability<&AnyResource{MarketplaceContract.SalePublic}>(/public/NFTSale).borrow()
-            ?? panic("Could not borrow acct2 nft sale reference")
-          
-          return acct1saleRef.getIDs()
+            let account1 = getAccount(0xf8d6e0586b0a20c7)
+        
+            let acct1saleRef = account1.getCapability<&AnyResource{MarketplaceContract.SalePublic}>(/public/NFTSale)
+                .borrow()
+                ?? panic("Could not borrow acct2 nft sale reference")
+        
+            return acct1saleRef.getIDs()
         }
-        `
+        `,
       ]);
 
       const decoded = await fcl.decode(encoded);

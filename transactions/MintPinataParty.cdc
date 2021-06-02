@@ -6,7 +6,7 @@ transaction {
 
   prepare(acct: AuthAccount){
     self.receiverRef = acct.getCapability<&{PinataPartyContract.NFTReceiver}>(/public/NFTReceiver).borrow()??panic("Could not borrow receiver reference")
-    self .minterRef = acct.borrow<&PinataPartyContract.NFTMinter>(from: /storage/NFTMinter)??panic("Could not borrow minter reference")
+    self.minterRef = acct.borrow<&PinataPartyContract.NFTMinter>(from: /storage/NFTMinter)??panic("Could not borrow minter reference")
   }
 
   execute {

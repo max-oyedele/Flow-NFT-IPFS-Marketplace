@@ -3,8 +3,6 @@
 <img src="./mvp.png" width="1248px" height="580px">
 
 ## Creating the contract and minting a token
-flow project init
-
 flow project start-emulator
 
 flow project deploy
@@ -33,11 +31,11 @@ flow accounts create --key <NewPublicKey>
 
 flow transactions status <TransactionID>
 
+flow transactions send --code ./transactions/ListTokenForSale.cdc
+
 flow transactions send --code ./transactions/CreateEmptyPinnieVault.cdc --signer second-account
 
 flow transactions send --code ./transactions/LinkPinnie.cdc --signer second-account
 
 flow transactions send --code ./transactions/TransferPinnieToken.cdc --signer emulator-account
-
-flow transactions send --code ./transactions/ListTokenForSale.cdc
 
